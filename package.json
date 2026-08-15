@@ -1,0 +1,27 @@
+{
+  "name": "education-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LearnifyAI — AI Work Verification & Oral Defense Platform",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "dev:web": "vite",
+    "build": "node scripts/clean-public.mjs && vite build"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.1",
+    "mammoth": "^1.12.0",
+    "multer": "^2.0.0",
+    "pdf-parse": "^1.1.1",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}

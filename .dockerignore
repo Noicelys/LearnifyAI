@@ -1,0 +1,30 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.gitattributes
+.env
+.env.*
+!.env.example
+
+# ข้อมูลจริง — ไม่ต้องเข้า image
+data
+uploads
+*.sqlite
+*.sqlite-journal
+
+# public ถูกสร้างใหม่จาก build stage ใน Dockerfile — กัน asset เก่าจากเครื่อง dev ติดไปด้วย
+public
+
+# เอกสาร/สคริปต์ที่ image ไม่ต้องใช้
+*.md
+*.pptx
+LICENSE
+Dockerfile
+docker-compose.yml
+Caddyfile
+db
+
+.vscode
+.idea
+.claude

@@ -1,0 +1,18 @@
+# ใช้ตอนขึ้น production จริง: docker compose --profile proxy up -d
+# Caddy จะขอ/ต่ออายุใบรับรอง HTTPS ให้อัตโนมัติ ถ้า DOMAIN ชี้ DNS มาที่ VPS แล้ว
+
+{$DOMAIN} {
+	encode gzip
+
+	# คลิปเสียงนักเรียนอาจไฟล์ใหญ่ ต้องรอ upload นาน
+	request_body {
+		max_size 100MB
+	}
+
+	reverse_proxy app:3000 {
+		transport http {
+			# ถอดเสียง + เรียก Typhoon ใช้เวลานาน อย่าให้ proxy ตัดก่อน
+			response_header_timeout 300s
+		}
+	}
+}

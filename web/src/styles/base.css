@@ -1,0 +1,77 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--t-base);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Elements that default to a UA font: form controls, monospace tags, dialogs. */
+button, input, select, textarea, optgroup, option, pre, code, kbd, samp, dialog {
+  font-family: var(--font);
+}
+pre, code, kbd, samp { font-variant-numeric: tabular-nums; }
+
+h1, h2, h3, h4 { margin: 0; line-height: 1.25; text-wrap: balance; font-weight: 700; }
+h1 { font-size: var(--t-xl); }
+h2 { font-size: var(--t-lg); }
+h3 { font-size: var(--t-md); }
+p { margin: 0; text-wrap: pretty; }
+a { color: var(--accent); }
+
+img, svg { max-width: 100%; }
+
+[hidden] { display: none !important; }
+
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+::selection { background: var(--accent-soft); color: var(--text); }
+
+/* numbers must line up wherever they are compared */
+.num, td.num, .stat-value, .score-value { font-variant-numeric: tabular-nums; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+
+.muted { color: var(--muted); }
+.text-2 { color: var(--text-2); }
+.hint { color: var(--muted); font-size: var(--t-sm); }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.eyebrow {
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.row { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.row-tight { display: flex; align-items: center; gap: var(--s-2); }
+.spread { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.stack { display: flex; flex-direction: column; gap: var(--s-4); }
+.stack-sm { display: flex; flex-direction: column; gap: var(--s-2); }
+.grow { flex: 1 1 auto; min-width: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

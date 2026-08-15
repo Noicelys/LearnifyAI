@@ -1,0 +1,17 @@
+# ปล่อยให้ git ตัดสินใจเรื่อง line ending ให้เอง แล้วเก็บเป็น LF ใน repo เสมอ
+* text=auto eol=lf
+
+# ไฟล์ไบนารี — ห้าม git แตะ line ending หรือพยายาม diff
+*.png    binary
+*.webp   binary
+*.woff   binary
+*.woff2  binary
+*.ttf    binary
+*.pptx   binary
+*.flac   binary
+*.mp3    binary
+*.mp4    binary
+*.wav    binary
+
+# lockfile ยาวมาก ยุบใน diff ของ GitHub
+package-lock.json linguist-generated=true -diff

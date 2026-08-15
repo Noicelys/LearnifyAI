@@ -1,0 +1,167 @@
+/* LearnifyAI — design tokens
+   Calm academic: paper surfaces, one ink-teal accent, generous rhythm.
+   Light is the base palette; dark is a full re-theme, not an inversion.
+   Theme resolution: :root = light, [data-theme="dark"] = dark,
+   and the no-preference default follows the OS. */
+
+@font-face {
+  font-family: "LINE Seed Sans TH";
+  src: url("/fonts/LINESeedSansTH_W_Th.woff") format("woff");
+  font-weight: 300; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "LINE Seed Sans TH";
+  src: url("/fonts/LINESeedSansTH_W_Rg.woff") format("woff");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "LINE Seed Sans TH";
+  src: url("/fonts/LINESeedSansTH_W_Bd.woff") format("woff");
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "LINE Seed Sans TH";
+  src: url("/fonts/LINESeedSansTH_W_XBd.woff") format("woff");
+  font-weight: 800; font-style: normal; font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+
+  /* surfaces */
+  --bg: #f7f5f0;
+  --surface: #ffffff;
+  --surface-2: #f2efe8;
+  --surface-3: #e8e4da;
+  --overlay-scrim: rgba(28, 30, 32, 0.38);
+
+  /* lines */
+  --line: #e3ded2;
+  --line-strong: #cdc6b6;
+
+  /* text */
+  --text: #1c1e20;
+  --text-2: #4c5257;
+  --muted: #7b8288;
+  --on-accent: #ffffff;
+
+  /* accent — one per view */
+  --accent: #1f6f78;
+  --accent-hover: #175a62;
+  --accent-soft: #e3f0f0;
+  --accent-line: #b8d8d8;
+  --focus: #1f6f78;
+
+  /* semantic verdicts */
+  --green: #2f7a4d;  --green-fg: #1e5636;  --green-bg: #e4f1e8;  --green-line: #b8ddc6;
+  --amber: #a5730c;  --amber-fg: #7a5406;  --amber-bg: #faf0d8;  --amber-line: #e8d19a;
+  --red:   #b23b30;  --red-fg:   #8c2b22;  --red-bg:   #fae7e4;  --red-line:   #eec3bc;
+  --neutral-fg: #5b6165; --neutral-bg: #eeeae1; --neutral-line: #dad4c7;
+  /* ใช้แยกส่วนของคำแนะนำให้กวาดตาแล้วรู้ว่าส่วนไหนคืออะไร (ดู .coach-section[data-tone]) */
+  --blue:   #2b5f9e;  --blue-fg:   #234e82;  --blue-bg:   #e5edf8;  --blue-line:   #bcd0ea;
+  --violet: #6a4a9c;  --violet-fg: #553b80;  --violet-bg: #eee9f8;  --violet-line: #d0c3ea;
+  --danger: #b23b30;
+
+  /* spacing scale */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 24px; --s-6: 32px; --s-7: 48px; --s-8: 64px;
+
+  /* radii */
+  --r-sm: 6px;
+  --r: 10px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+
+  /* elevation */
+  --shadow-sm: 0 1px 2px rgba(28, 30, 32, .06);
+  --shadow: 0 2px 8px rgba(28, 30, 32, .07), 0 1px 2px rgba(28, 30, 32, .05);
+  --shadow-lg: 0 24px 48px -16px rgba(28, 30, 32, .28);
+
+  /* type */
+  --font: "LINE Seed Sans TH", -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+  /* One typeface everywhere. Codes and numbers keep their fixed-width feel from
+     font-variant-numeric: tabular-nums, not from a second font family. */
+  --mono: "LINE Seed Sans TH", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --t-xs: 12px; --t-sm: 13px; --t-base: 15px; --t-md: 17px;
+  --t-lg: 21px; --t-xl: 27px; --t-2xl: 34px;
+
+  /* layout */
+  --sidebar: 264px;
+  --content-max: 1160px;
+
+  /* z ladder — no arbitrary values anywhere else */
+  --z-base: 0;
+  --z-sticky: 30;
+  --z-overlay: 100;
+  --z-toast: 200;
+
+  /* motion */
+  --dur: 160ms;
+  --ease: cubic-bezier(.2, .7, .3, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { color-scheme: dark; }
+}
+
+:root[data-theme="dark"] { color-scheme: dark; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171a;
+    --surface: #1c2024;
+    --surface-2: #23282d;
+    --surface-3: #2d3339;
+    --overlay-scrim: rgba(0, 0, 0, .58);
+    --line: #2b3137;
+    --line-strong: #414951;
+    --text: #ecebe7;
+    --text-2: #b6bcc1;
+    --muted: #848c93;
+    --on-accent: #08201f;
+    --accent: #62b7ba;
+    --accent-hover: #7ec9cb;
+    --accent-soft: #17302f;
+    --accent-line: #2c4c4c;
+    --focus: #62b7ba;
+    --green: #4fa96f;  --green-fg: #93d6a9;  --green-bg: #16301f;  --green-line: #2c5638;
+    --amber: #d0a038;  --amber-fg: #ebc472;  --amber-bg: #322710;  --amber-line: #5a4718;
+    --red:   #d9604f;  --red-fg:   #f0a096;  --red-bg:   #331a16;  --red-line:   #5c2e27;
+    --neutral-fg: #9aa1a7; --neutral-bg: #262b30; --neutral-line: #394046;
+    --blue:   #6ea3e0;  --blue-fg:   #a6c8f0;  --blue-bg:   #16233a;  --blue-line:   #2c4260;
+    --violet: #a98ce0;  --violet-fg: #c6b1f0;  --violet-bg: #241c38;  --violet-line: #423461;
+    --danger: #d9604f;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow: 0 2px 10px rgba(0, 0, 0, .45);
+    --shadow-lg: 0 24px 56px -16px rgba(0, 0, 0, .7);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #14171a;
+  --surface: #1c2024;
+  --surface-2: #23282d;
+  --surface-3: #2d3339;
+  --overlay-scrim: rgba(0, 0, 0, .58);
+  --line: #2b3137;
+  --line-strong: #414951;
+  --text: #ecebe7;
+  --text-2: #b6bcc1;
+  --muted: #848c93;
+  --on-accent: #08201f;
+  --accent: #62b7ba;
+  --accent-hover: #7ec9cb;
+  --accent-soft: #17302f;
+  --accent-line: #2c4c4c;
+  --focus: #62b7ba;
+  --green: #4fa96f;  --green-fg: #93d6a9;  --green-bg: #16301f;  --green-line: #2c5638;
+  --amber: #d0a038;  --amber-fg: #ebc472;  --amber-bg: #322710;  --amber-line: #5a4718;
+  --red:   #d9604f;  --red-fg:   #f0a096;  --red-bg:   #331a16;  --red-line:   #5c2e27;
+  --neutral-fg: #9aa1a7; --neutral-bg: #262b30; --neutral-line: #394046;
+  --blue:   #6ea3e0;  --blue-fg:   #a6c8f0;  --blue-bg:   #16233a;  --blue-line:   #2c4260;
+  --violet: #a98ce0;  --violet-fg: #c6b1f0;  --violet-bg: #241c38;  --violet-line: #423461;
+  --danger: #d9604f;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow: 0 2px 10px rgba(0, 0, 0, .45);
+  --shadow-lg: 0 24px 56px -16px rgba(0, 0, 0, .7);
+}

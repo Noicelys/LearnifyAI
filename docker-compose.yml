@@ -1,0 +1,373 @@
+# AI Work Verification & Oral Defense Platform
+#
+# เริ่มใช้งาน:
+#   ตั้งค่าใน .env (อย่างน้อย SESSION_SECRET กับ TEACHER_PASSWORD) ก่อนเสมอ
+#
+# ระบบมี AI สองตัว สลับ "ในเครื่อง / คลาวด์" ได้อิสระจากกัน จับคู่กันแบบไหนก็ได้:
+#
+#   ตัว          | ในเครื่อง                        | คลาวด์
+#   ─────────────┼─────────────────────────────────┼──────────────────────────────
+#   ถอดเสียง      | STT_PROVIDER=local (ตั้งต้น)     | STT_PROVIDER=cloud + STT_API_KEY
+#                | + profile local-stt              | (ไม่ต้องสตาร์ต service อะไรเพิ่ม)
+#   วิเคราะห์     | AI_PROVIDER=ollama              | AI_PROVIDER=cloud + TYPHOON_API_KEY
+#                | + profile local-ai               | (ไม่ต้องสตาร์ต service อะไรเพิ่ม)
+#
+# ⚠ ค่าใน .env กับ profile ต้องตรงกัน ไม่งั้นจะได้ container ที่ไม่มีใครเรียก (เปิดเกิน)
+#   หรือแอปเรียกไปยัง service ที่ไม่ได้สตาร์ต (ต่อไม่ติด)
+#
+# คลาวด์ล้วน (เบาที่สุด ไม่ต้องมีการ์ดจอ):
+#   docker compose up -d --build
+# ในเครื่องล้วน (ข้อมูลไม่ออกนอกเซิร์ฟเวอร์ รอบแรกโหลดโมเดลรวม ~4GB):
+#   docker compose --profile local-stt --profile local-ai up -d --build
+#   ดูความคืบหน้าการโหลดโมเดล: docker compose logs -f ollama-pull whisper
+
+services:
+  # ─────────────────────────────────────────────
+  # Backend + Web (Node.js + Express + PostgreSQL)
+  # ─────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: eduai-app
+    restart: "no"
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # ข้อมูลทั้งหมดอยู่บน PostgreSQL แล้ว (ตั้งค่าการเชื่อมต่อไว้ด้านล่าง)
+      # ที่เก็บคลิปเสียงนักเรียน + ไฟล์งานที่ดึงจาก Drive
+      UPLOAD_DIR: /app/uploads
+      # ── ตัวถอดเสียง ──
+      # STT_PROVIDER=local (ค่าตั้งต้น) ใช้ service whisper ด้านล่าง — เสียงไม่ออกนอกเซิร์ฟเวอร์
+      # STT_PROVIDER=cloud            ยิงไป API ข้างนอก — ไม่กิน CPU/RAM เครื่องเลย แต่ต้องมี STT_API_KEY
+      # สลับเป็น cloud แล้วอย่าลืมสตาร์ตด้วย --profile local-stt เฉพาะตอนจะกลับมาใช้ในเครื่อง
+      STT_PROVIDER: ${STT_PROVIDER:-local}
+      # เรียก whisper ผ่าน service name ภายใน network ของ compose (ใช้เฉพาะโหมด local)
+      WHISPER_URL: http://whisper:9000
+      # ค่าของฝั่งคลาวด์ — ค่าตั้งต้นชี้ไป Groq (ดูรายละเอียดใน src/whisper.js)
+      STT_API_KEY: ${STT_API_KEY:-}
+      STT_BASE_URL: ${STT_BASE_URL:-https://api.groq.com/openai/v1}
+      STT_MODEL: ${STT_MODEL:-whisper-large-v3}
+      STT_TIMEOUT_MS: ${STT_TIMEOUT_MS:-120000}
+      STT_MAX_UPLOAD_MB: ${STT_MAX_UPLOAD_MB:-24}
+      # หน้าสถานะระบบเอาไปแสดงว่ากำลังใช้โมเดลไหนอยู่ตอนโหมด local
+      ASR_MODEL: ${ASR_MODEL:-large-v3-turbo}
+      # ── ตัววิเคราะห์ ──
+      # เลือกได้ 2 ทาง ผ่านตัวแปรเดียว (ค่าตั้งต้น cloud = พฤติกรรมเดิม):
+      #   AI_PROVIDER=ollama  ← ค่าตั้งต้น: รันโมเดลบนการ์ดจอในเครื่อง ไม่ต้องมีคีย์
+      #                          และงานนักเรียนไม่ถูกส่งออกไปนอกเซิร์ฟเวอร์
+      #   AI_PROVIDER=cloud      ใช้ Typhoon Cloud — เร็วกว่า แต่ต้องมี TYPHOON_API_KEY
+      #                          และข้อมูลถูกส่งออกไปข้างนอก
+      # สลับได้โดยใส่บรรทัดนี้ใน .env แล้ว docker compose up -d
+      AI_PROVIDER: ${AI_PROVIDER:-ollama}
+
+      # ค่าของฝั่งคลาวด์
+      TYPHOON_API_KEY: ${TYPHOON_API_KEY:-}
+      TYPHOON_BASE_URL: ${TYPHOON_BASE_URL:-https://api.opentyphoon.ai/v1}
+      TYPHOON_MODEL: ${TYPHOON_MODEL:-typhoon-v2.5-30b-a3b-instruct}
+
+      # ค่าของฝั่งในเครื่อง — แยกตัวแปรกัน เพราะชื่อโมเดลคนละระบบใช้แทนกันไม่ได้
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434/v1}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-scb10x/typhoon2.5-qwen3-4b}
+      # ตัดเนื้องานกัน context ล้น — ต้องขยับตาม OLLAMA_CONTEXT_LENGTH เสมอ
+      # วัดจริงแล้ว: ภาษาไทยกิน ~0.59 token ต่อตัวอักษร → 9000 ตัวอักษร = ~5300 tokens
+      # (รวม system prompt + transcript แล้ว) ยังเหลือที่ใน context 8192 อีก ~2900 tokens
+      # ยืนยันจาก log ของ ollama ว่า truncated = 0
+      OLLAMA_SOURCE_LIMIT: ${OLLAMA_SOURCE_LIMIT:-9000}
+
+      # คลาวด์ตอบในไม่กี่วินาที แต่ CPU ในเครื่องอาจใช้เป็นนาที — ตั้งตามทางที่เลือกใช้
+      TYPHOON_TIMEOUT_MS: ${TYPHOON_TIMEOUT_MS:-60000}
+      OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-300000}
+      # ผู้ช่วยค้นแหล่งอ่านเพิ่มเติม (วางแผนคำค้น + คัดบทความ — ดู src/opencodezen.js)
+      # ไม่ส่งเข้ามา = โค้ดใช้ค่า hardcode ในไฟล์แทน แก้ .env แล้วไม่มีผล
+      OPENCODEZEN_API_KEY: ${OPENCODEZEN_API_KEY:-}
+      OPENCODEZEN_BASE_URL: ${OPENCODEZEN_BASE_URL:-https://opencode.ai/zen/v1}
+      OPENCODEZEN_MODEL: ${OPENCODEZEN_MODEL:-deepseek-v4-flash-free}
+      # เนื้องานจาก Drive เก่ากว่านี้กี่นาที ถึงจะดึงใหม่ตอนมีนักเรียนส่งงาน (ดู src/assignmentSource.js)
+      SOURCE_MAX_AGE_MIN: ${SOURCE_MAX_AGE_MIN:-360}
+      SESSION_SECRET: ${SESSION_SECRET}
+      # รหัสผ่านเข้าหน้าครู — นักเรียนใช้ลิงก์เฉพาะงาน ไม่ต้องใช้รหัสนี้
+      TEACHER_PASSWORD: ${TEACHER_PASSWORD}
+      # ตั้ง true เมื่อขึ้น production หลัง HTTPS (ตอน dev บน http ต้องเป็น false)
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # ใช้ดูรายชื่อไฟล์ในโฟลเดอร์ Drive public เท่านั้น (ไม่ใช่ OAuth ไม่ต้องล็อกอิน Google)
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-Education_AI}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+      - ./public:/app/public
+      - ./src:/app/src
+    depends_on:
+      # ต้องรอ postgres พร้อมก่อน — ระบบเตรียมตารางตอนบูตและจะออกทันทีถ้าต่อฐานไม่ได้
+      postgres:
+        condition: service_healthy
+      # ── สอง service ล่างนี้อยู่ใต้ profile ──
+      # required: false = ถ้าไม่ได้เปิด profile ก็ข้ามไป app สตาร์ตได้ตามปกติ
+      # ถ้าเปิด profile ก็ยังรอให้พร้อมก่อนเหมือนเดิมทุกอย่าง (สำคัญมาก เพราะรอบแรก
+      # ต้องโหลดโมเดลหลาย GB — ถ้าไม่รอ งานแรกที่ครูส่งจะพังพร้อมข้อความที่ชวนงง)
+      whisper:
+        condition: service_healthy
+        required: false
+      ollama-pull:
+        condition: service_completed_successfully
+        required: false
+    healthcheck:
+      # ต้องเป็น 127.0.0.1 ไม่ใช่ localhost — busybox wget จะลอง ::1 ก่อน
+      # แต่ Node bind ไว้ที่ 0.0.0.0 (IPv4 เท่านั้น) จะได้ connection refused
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - eduai
+
+  # ─────────────────────────────────────────────
+  # Faster-Whisper (STT) — CPU, โมเดล small int8
+  # ใช้ image สำเร็จรูป จะได้ไม่ต้องดูแลโค้ด Python เอง
+  # API: POST /asr?task=transcribe&language=th  (multipart field ชื่อ audio_file)
+  # ─────────────────────────────────────────────
+  whisper:
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    container_name: eduai-whisper
+    restart: "no"
+    # สตาร์ตเฉพาะตอนใช้ถอดเสียงในเครื่อง:  docker compose --profile local-stt up -d
+    # (คู่กับ STT_PROVIDER=local ใน .env — ต้องตั้งให้ตรงกันทั้งสองที่)
+    profiles: ["local-stt"]
+    environment:
+      ASR_ENGINE: faster_whisper
+      # ── ความแม่นของการถอดเสียงภาษาไทย ──────────────────
+      # ภาษาไทยเป็นภาษาที่ Whisper ถอดยากที่สุดกลุ่มหนึ่ง (ไม่มีเว้นวรรคระหว่างคำ + วรรณยุกต์)
+      # โมเดล small ถอดไทยเพี้ยนจนอ่านไม่รู้เรื่องบ่อยมาก โดยเฉพาะศัพท์วิชาการ
+      #
+      # large-v3-turbo = ตัวกลั่นจาก large-v3 แม่นใกล้เคียงตัวเต็มแต่เร็วกว่าหลายเท่า
+      # ขนาด ~1.6GB (เทียบกับ small 0.5GB) จึงต้องขยาย memory limit ด้านล่างด้วย
+      #
+      # ถ้าเครื่องช้าเกินรับไหว ลดลงมาเป็น medium ได้ (ยังดีกว่า small ชัดเจน)
+      #   turbo คุณภาพสูงสุด/เร็ว · medium สมดุล · small เร็วสุดแต่ไทยเพี้ยน
+      ASR_MODEL: ${ASR_MODEL:-large-v3-turbo}
+      ASR_COMPUTE_TYPE: ${ASR_COMPUTE_TYPE:-int8}
+      ASR_DEVICE: cpu
+
+      # ── ค่าถอดเสียงที่ endpoint /asr ไม่เปิดให้ตั้ง ──────────────────
+      # อ่านโดย whisper-patch/faster_whisper_engine.py ที่ mount ทับไว้ด้านล่าง
+      # ปล่อยว่าง = ใช้ค่าในไฟล์ patch แก้ที่นี่เมื่อจะจูนโดยไม่ต้อง restart ทั้งสแตก
+      #
+      # ตัวสำคัญที่สุด: ปิดการเอาข้อความท่อนก่อนไปเป็นบริบทของท่อนถัดไป
+      # เปิดไว้ (ค่าเริ่มต้นของ faster-whisper) แล้วเสียงไม่ชัด = ถอดผิดลามเป็นลูกโซ่จนวนซ้ำ
+      WHISPER_CONDITION_ON_PREVIOUS_TEXT: ${WHISPER_CONDITION_ON_PREVIOUS_TEXT:-false}
+      # ตัดข้อความที่โมเดลแต่งขึ้นในช่วงที่เงียบจริง (เสียงลมมักโดนตีเป็นเสียงพูด)
+      WHISPER_HALLUCINATION_SILENCE_S: ${WHISPER_HALLUCINATION_SILENCE_S:-2.0}
+      # VAD: ยอมให้เสียงเบา/พูดไม่ชัดผ่านมากขึ้น (ค่าเริ่มต้น 0.5 ตัดทิ้งเยอะไป)
+      WHISPER_VAD_THRESHOLD: ${WHISPER_VAD_THRESHOLD:-0.35}
+      WHISPER_VAD_SPEECH_PAD_MS: ${WHISPER_VAD_SPEECH_PAD_MS:-400}
+    volumes:
+      # cache โมเดลไว้ ไม่ต้องโหลดใหม่ทุกครั้งที่ restart (~1.6GB สำหรับ large-v3-turbo)
+      - whisper-models:/root/.cache
+      # ── แทนที่ตัวถอดเสียงด้วยเวอร์ชันที่ตั้งพารามิเตอร์ได้ ──────────
+      # ⚠ ก่อนใช้ครั้งแรก ต้องเช็คว่า path ในคอนเทนเนอร์ตรงกับเครื่องจริงไหม:
+      #     docker compose run --rm --entrypoint sh whisper -c \
+      #       "find / -name faster_whisper_engine.py -not -path '*/node_modules/*' 2>/dev/null"
+      #   ถ้าได้ path อื่น (เช่นใต้ site-packages) ให้แก้ฝั่งขวาของบรรทัดล่างตามนั้น
+      #
+      # ⚠ image เป็น :latest — ถ้าอัปเดตแล้วต้นฉบับเปลี่ยน ไฟล์ที่ mount ทับอาจพัง
+      #   เมื่อระบบนิ่งแล้วควรปักเวอร์ชัน (ดูแท็กที่ใช้ได้จาก docker image inspect)
+      - ./whisper-patch/faster_whisper_engine.py:/app/app/asr_models/faster_whisper_engine.py:ro
+    # ไม่ publish port ออกนอกเครื่อง — ให้ app เรียกผ่าน network ภายในเท่านั้น
+    expose:
+      - "9000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/docs"]
+      interval: 30s
+      timeout: 10s
+      # โหลดโมเดลรอบแรกช้ามาก — large-v3-turbo ~1.6GB ใช้เวลาหลายนาทีตามความเร็วเน็ต
+      # ถ้า start_period สั้นไป คอนเทนเนอร์จะถูกตีเป็น unhealthy ระหว่างดาวน์โหลด
+      # แล้ว app ที่ depends_on: service_healthy จะไม่ยอมสตาร์ต
+      # รอบถัดไปมีไฟล์ใน volume แล้ว จะผ่านภายในไม่กี่วินาที
+      retries: 10
+      start_period: 900s
+    deploy:
+      resources:
+        limits:
+          # กัน whisper กิน RAM จนล้ม VPS ตัวเล็ก
+          # large-v3-turbo แบบ int8 ใช้ ~2.2GB ตอนถอดจริง — 2g เดิมจะโดน OOM kill
+          memory: ${WHISPER_MEMORY_LIMIT:-4g}
+    networks:
+      - eduai
+
+  # ─────────────────────────────────────────────
+  # Ollama — รันโมเดลภาษาในเครื่องเราเอง (ใช้การ์ดจอ NVIDIA)
+  # เปิด API แบบเดียวกับ OpenAI ที่ /v1/chat/completions โค้ดเดิมจึงใช้ต่อได้เลย
+  # ข้อดีคืองานนักเรียนไม่ถูกส่งออกไปนอกเซิร์ฟเวอร์ และไม่มีค่า API
+  # ─────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: eduai-ollama
+    restart: "no"
+    # สตาร์ตเฉพาะตอนใช้ตัววิเคราะห์ในเครื่อง:  docker compose --profile local-ai up -d
+    # (คู่กับ AI_PROVIDER=ollama ใน .env — ต้องตั้งให้ตรงกันทั้งสองที่)
+    profiles: ["local-ai"]
+    environment:
+      # กันโมเดลถูกเตะออกจากแรมหลังไม่ใช้ 5 นาที ไม่งั้นครูต้องรอโหลดใหม่ทุกครั้ง
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
+      # ตรวจทีละคนอยู่แล้ว ไม่ต้องรันคู่ขนานให้แย่งการ์ดจอกัน
+      OLLAMA_NUM_PARALLEL: 1
+      OLLAMA_MAX_LOADED_MODELS: 1
+
+      # ── บีบ KV cache ให้โมเดลลง GPU ได้ทั้งตัว ──────────
+      # f16 (ค่าเดิม) กิน 0.141 MiB ต่อ token → ที่ 12288 tokens = 1728 MiB
+      # q8_0 เหลือครึ่งเดียว = 864 MiB ซึ่งเป็นตัวชี้ขาดว่ายัดลง VRAM 4GB ได้หรือไม่
+      # คุณภาพต่างจาก f16 แทบไม่รู้สึกสำหรับงานให้คะแนน
+      # (flash attention ที่ q8_0 ต้องใช้ Ollama เปิดให้เองอยู่แล้ว ไม่ต้องตั้ง OLLAMA_FLASH_ATTENTION)
+      OLLAMA_KV_CACHE_TYPE: ${OLLAMA_KV_CACHE_TYPE:-q8_0}
+
+      # ── พื้นที่ VRAM ที่ Ollama กันไว้ไม่ยอมใช้ ──────────
+      # ระวัง: CUDA ใน WSL2 เห็น VRAM ว่างแค่ 3303 MiB ทั้งที่ nvidia-smi บนวินโดวส์บอก 3964
+      # ส่วนต่าง ~660 MiB เป็น overhead ของ GPU paravirtualization เอาคืนไม่ได้
+      # จึงต้องคิดงบจาก 3303 เท่านั้น:
+      #   งบ KV = 3303 − ค่านี้ − 2375 (โมเดล) − 87 (compute)
+      # ค่าตั้งต้นของ Ollama คือ 1024 ซึ่งเหลืองบติดลบ → ยัดลง GPU ไม่หมดไม่ว่าจะลด context เท่าไหร่
+      # ที่ 192 เหลือที่ว่างจริงหลังโหลด ~230 MiB (ยืนยันแล้วว่าได้ 37/37 layers)
+      # ถ้าเจอ CUDA out of memory ตอนใช้จริง ให้เพิ่มค่านี้ทีละ 64 แล้วลด context ตามตารางล่าง
+      LLAMA_ARG_FIT_TARGET: ${LLAMA_ARG_FIT_TARGET:-192}
+
+      # ── ขนาด context ───────────────────────────────────
+      # ต้องใหญ่พอใส่ เนื้องาน + transcript + คำตอบ ได้ครบในรอบเดียว
+      # ต้องขยับ OLLAMA_SOURCE_LIMIT (service app) ตามเสมอ
+      # ไม่งั้นเนื้องานจะถูก context ตัดกลางคันแบบเงียบ ๆ โดยไม่มี error
+      #
+      # KV cache แบบ q8_0 กิน 0.0747 MiB ต่อ token → 8192 tokens = 612 MiB
+      # เช็คว่าลง GPU หมดจริงไหม:  docker compose exec ollama ollama ps   (ต้องเห็น 100% GPU)
+      #
+      # ── ปรับตามการ์ดที่ใช้ ──
+      #   4GB (3050)   → 8192 / source 9000  ← ตอนนี้ (วัดแล้ว 37/37 layers, 100% GPU, เหลือ VRAM 800 MiB)
+      #                  12288 ยัดไม่ลงบนการ์ด 4GB ไม่ว่าจะตั้ง fit target เท่าไหร่ — และไม่จำเป็นด้วย
+      #                  เพราะงานยาว 9000 ตัวอักษรใช้แค่ ~5300 tokens
+      #   8GB (4060)   → 16384 / source 18000
+      #   12GB (3060)  → 32768 / source 36000
+      #   16GB ขึ้นไป   → 65536 ขึ้นไป (โมเดลนี้รองรับสูงสุด 256K)
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-8192}
+
+      # เห็นใน log ว่าโหลดขึ้นการ์ดจอกี่เลเยอร์ ใช้ไล่ปัญหาตอนตอบช้า
+      OLLAMA_DEBUG: ${OLLAMA_DEBUG:-0}
+
+      # เลือกการ์ดใบไหน (เครื่องที่มีหลายใบ) — ใบแรกคือ 0
+      NVIDIA_VISIBLE_DEVICES: ${OLLAMA_GPU_IDS:-0}
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    volumes:
+      - ollama-models:/root/.ollama
+    # ไม่ publish ออกนอกเครื่อง — ให้ app เรียกผ่าน network ภายในเท่านั้น
+    expose:
+      - "11434"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama --version >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    deploy:
+      resources:
+        # ── ใช้การ์ดจอ NVIDIA (ตอนนี้: RTX 3050 Laptop 4GB) ──
+        # ต้องมี NVIDIA driver บนเครื่องแม่ + NVIDIA Container Toolkit
+        # เช็คว่าพร้อมไหม:  docker info | grep -i nvidia   (ต้องเห็น runtime ชื่อ nvidia)
+        # เช็คว่าเห็นการ์ดจริงไหม:
+        #   docker compose exec ollama nvidia-smi
+        #
+        # ── ถ้าจะย้ายไปรันบน VPS ที่ไม่มีการ์ดจอ ──
+        # ลบทั้งบล็อก reservations นี้ทิ้ง (หรือคอมเมนต์ไว้) แล้ว Ollama จะรันบน CPU เอง
+        # อย่าลืมลด OLLAMA_CONTEXT_LENGTH และเพิ่ม OLLAMA_TIMEOUT_MS ด้วย เพราะ CPU ช้ากว่ามาก
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - eduai
+
+  # โหลดโมเดลครั้งแรกแล้วจบไป (รอบถัดไปมีใน volume แล้ว จะข้ามเองภายในไม่กี่วินาที)
+  # แยกเป็น service ต่างหากเพราะ app ต้องรอให้โหลดเสร็จก่อนถึงจะรับงานได้
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: eduai-ollama-pull
+    restart: "no"
+    profiles: ["local-ai"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    volumes:
+      - ollama-models:/root/.ollama
+    entrypoint: ["/bin/sh", "-c"]
+    # ครั้งแรกโหลด ~2.5GB ใช้เวลาสักพัก ดูความคืบหน้าได้ที่ docker compose logs -f ollama-pull
+    command: >
+      'ollama pull "${OLLAMA_MODEL:-scb10x/typhoon2.5-qwen3-4b}" &&
+       echo "โมเดล ${OLLAMA_MODEL:-scb10x/typhoon2.5-qwen3-4b} พร้อมใช้งานแล้ว"'
+    networks:
+      - eduai
+
+  # ─────────────────────────────────────────────
+  # (ทางเลือก) Caddy — HTTPS อัตโนมัติ ตอนขึ้น production จริง
+  # เปิดใช้: docker compose --profile proxy up -d
+  # ─────────────────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    container_name: eduai-caddy
+    restart: "no"
+    profiles: ["proxy"]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    networks:
+      - eduai
+
+  # ─────────────────────────────────────────────
+  # PostgreSQL Database
+  # ─────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: eduai-postgres
+    restart: "no"
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-Education_AI}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-Education_AI}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - eduai
+
+volumes:
+  whisper-models:
+  caddy-data:
+  caddy-config:
+  postgres-data:
+  ollama-models:
+
+networks:
+  eduai:
+    driver: bridge
